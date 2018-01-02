@@ -3,7 +3,6 @@
 #include <SFML\System.hpp>
 #include <SFML\Audio.hpp>
 #include <cmath>
-#include <conio.h>
 #include <iostream>
 
 constexpr float GRAVITY = 10.0;
@@ -11,6 +10,16 @@ constexpr float JUMP_START = -40.0;
 constexpr unsigned WINDOW_HEIGHT = 480;
 constexpr unsigned WINDOW_WIDTH = 640;
 constexpr unsigned MAX_HAND_ANGLE = 85;
+
+struct Ezbot
+{
+    sf::Texture texture;
+    sf::Sprite sprite;
+    sf::Vector2f position;
+    sf::Vector2f speed;
+    float time = 0;
+    bool isAlive;
+};
 
 struct Character
 {
@@ -21,6 +30,18 @@ struct Character
     sf::Vector2f speed;
     float time = 0;
     float startY;
+    float angle;
+};
+
+struct Grenade
+{
+    sf::Texture texture;
+    sf::Sprite sprite;
+    sf::Vector2f position;
+    sf::Vector2f speed;
+    float time = 0;
+    bool isFlying;
+    bool isStartAngleChanged;
 };
 
 void jumping(Character &character, float deltaTime, int &isJumped)
@@ -31,14 +52,34 @@ void jumping(Character &character, float deltaTime, int &isJumped)
     if (character.position.y >= WINDOW_HEIGHT - 50)
     {
         character.time = 0;
-        isJumped = 1;
+        isJumped = 0;
     }
 }
 
-void update(Character &character, float deltaTime, int &isJumped)
+void flying(Grenade &grenade, Character &character, float deltaTime, float startAngle)
+{
+    startAngle = character.hand.getRotation();
+    grenade.position = grenade.sprite.getPosition();
+    grenade.time += deltaTime * 10;
+    grenade.speed.x = -2 * JUMP_START * std::cos(startAngle * M_PI / 180);
+    float nextY = character.startY - 2 * JUMP_START * std::sin(startAngle * M_PI / 180) * grenade.time + GRAVITY * std::pow(grenade.time, 2) * 0.5;
+    grenade.position.y = nextY;
+    grenade.position.x += grenade.speed.x * deltaTime;
+    if ((grenade.position.y >= WINDOW_HEIGHT - grenade.texture.getSize().y / 10) ||
+        (grenade.position.x >= WINDOW_WIDTH - grenade.texture.getSize().x / 10) ||
+        (grenade.position.x <= grenade.texture.getSize().x / 2) ||
+        (grenade.position.y <= grenade.texture.getSize().y / 2))
+    {
+        grenade.time = 0;
+        grenade.isFlying = false;
+    }
+}
+
+void update(Character &character, Grenade &grenade, float deltaTime, int &isJumped)
 {
     character.position = character.sprite.getPosition();
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+    float startAngle;
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
     {
         character.speed.x = -100;
         character.sprite.setScale(-1, 1);
@@ -49,7 +90,7 @@ void update(Character &character, float deltaTime, int &isJumped)
         }
         character.position += character.speed * deltaTime;
     }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
     {
         character.speed.x = 100;
         character.sprite.setScale(1, 1);
@@ -60,9 +101,9 @@ void update(Character &character, float deltaTime, int &isJumped)
         }
         character.position += character.speed * deltaTime;
     }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
     {
-        isJumped = 2;
+        isJumped = 1;
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Tab))
     {
@@ -71,17 +112,41 @@ void update(Character &character, float deltaTime, int &isJumped)
         character.sprite.setScale(1, 1);
         isJumped = 0;
     }
-    if (isJumped == 2)
+    if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
+    {
+        if (!grenade.isFlying)
+        {
+            grenade.isStartAngleChanged = false;
+            grenade.sprite.setPosition(character.sprite.getPosition());
+            grenade.isFlying = true;
+        }
+        if (!grenade.isStartAngleChanged)
+        {
+            startAngle = character.hand.getRotation();
+        }
+    }
+    if ((grenade.isFlying) && (sf::Keyboard::isKeyPressed(sf::Keyboard::F)))
+    {
+        grenade.isFlying = false;
+        grenade.time = 0;
+        grenade.sprite.setPosition(character.sprite.getPosition());
+    }
+    if (isJumped == 1)
     {
         jumping(character, deltaTime, isJumped);
     }
+    if (grenade.isFlying)
+    {
+        flying(grenade, character, deltaTime, startAngle);
+    }
+    grenade.sprite.setPosition(grenade.position);
     character.sprite.setPosition(character.position);
     character.hand.setPosition(character.position);
 }
 
 void initCharacter(Character &character)
 {
-    character.texture.loadFromFile("./game/cat.png");
+    character.texture.loadFromFile("./cat.png");
     character.sprite.setTexture(character.texture);
     character.sprite.setOrigin(character.texture.getSize().x / 2, character.texture.getSize().y / 2);
     character.sprite.setPosition(WINDOW_WIDTH / 2, WINDOW_HEIGHT - 50);
@@ -93,29 +158,58 @@ void initCharacter(Character &character)
     character.hand.setRotation(0);
 }
 
+void initGrenade(Grenade &grenade)
+{
+    grenade.texture.loadFromFile("./gren.png");
+    grenade.sprite.setTexture(grenade.texture);
+    grenade.sprite.setOrigin(grenade.texture.getSize().x / 2, grenade.texture.getSize().y / 2);
+    grenade.sprite.setScale(0.2, 0.2);
+    grenade.isFlying = false;
+}
+
+void initBot(Ezbot &ezbot)
+{
+    ezbot.texture.loadFromFile("./another cat.png");
+    ezbot.sprite.setTexture(ezbot.texture);
+    ezbot.sprite.setOrigin(ezbot.texture.getSize().x / 2, ezbot.texture.getSize().y / 2);
+    ezbot.isAlive = true;
+    ezbot.sprite.setPosition(999, 999);
+}
+
+void spawnSomeBotz(Ezbot &ezbot, float deltaTime)
+{
+    ezbot.time += deltaTime;
+    float botSpawnTime = 30;
+    float deltaBot = remainder(ezbot.time, botSpawnTime);
+    if (deltaBot = 0)
+    {
+        ezbot.sprite.setPosition(WINDOW_WIDTH / 5, WINDOW_HEIGHT - 50);
+    }
+}
+
 float toDegrees(float radians)
 {
     return float(double(radians) * 180.0 / M_PI);
 }
 
-void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, Character &character)
+void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, Character &character, Grenade &grenade)
 {
+    grenade.isStartAngleChanged = true;
     mousePosition = {float(event.x), float(event.y)};
     sf::Vector2f delta = mousePosition - character.hand.getPosition();
-    float angle = toDegrees(atan2(delta.y, delta.x));
-    std::cout << angle << std::endl;
+    character.angle = toDegrees(atan2(delta.y, delta.x));
     if (character.sprite.getScale().x > 0)
     {
-        if ((std::abs(angle) <= MAX_HAND_ANGLE))
+        if ((std::abs(character.angle) <= MAX_HAND_ANGLE))
         {
-            character.hand.setRotation(angle);
+            character.hand.setRotation(character.angle);
         }
     }
     else
     {
-        if ((std::abs(angle) <= 180) && (std::abs(angle) >= 180 - MAX_HAND_ANGLE))
+        if ((std::abs(character.angle) <= 180) && (std::abs(character.angle) >= 180 - MAX_HAND_ANGLE))
         {
-            character.hand.setRotation(angle);
+            character.hand.setRotation(character.angle);
         }
     }
 }
@@ -129,6 +223,11 @@ int main()
 
     Character character;
     initCharacter(character);
+    Grenade grenade;
+    initGrenade(grenade);
+
+    Ezbot ezbot;
+    initBot(ezbot);
 
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Game testing screen");
     window.setFramerateLimit(60);
@@ -144,15 +243,21 @@ int main()
             }
             if (event.type == sf::Event::MouseMoved)
             {
-                onMouseMove(event.mouseMove, mousePosition, character);
+                onMouseMove(event.mouseMove, mousePosition, character, grenade);
             }
         }
 
         float deltaTime = clock.restart().asSeconds();
 
-        update(character, deltaTime, isJumped);
+        spawnSomeBotz(ezbot, deltaTime);
+        update(character, grenade, deltaTime, isJumped);
         window.clear(sf::Color(255, 255, 255));
         window.draw(character.sprite);
+        window.draw(ezbot.sprite);
+        if (grenade.isFlying)
+        {
+            window.draw(grenade.sprite);
+        }
         window.draw(character.hand);
         window.display();
     }
