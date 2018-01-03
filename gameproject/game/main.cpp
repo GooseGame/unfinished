@@ -29,11 +29,16 @@ struct Character
     sf::Texture texture;
     sf::Sprite sprite;
     sf::RectangleShape hand;
+    sf::Texture swordTexture;
+    sf::Sprite sword;
     sf::Vector2f position;
     sf::Vector2f speed;
+    bool isImmune;
     float time = 0;
     float startY;
     float angle;
+    float immuneTime = 0;
+    int life_count;
 };
 
 struct Grenade
@@ -128,6 +133,23 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
             startAngle = character.hand.getRotation();
         }
     }
+    if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+    {
+        if (character.sprite.getScale().x == 1)
+        {
+            character.sword.setScale(0.4, 0.4);
+            character.sword.setPosition(character.sprite.getPosition());
+        }
+        if (character.sprite.getScale().x == -1)
+        {
+            character.sword.setScale(-0.4, 0.4);
+            character.sword.setPosition(character.sprite.getPosition());
+        }
+    }
+    else
+    {
+        character.sword.setPosition(200, 200);
+    }
     if ((grenade.isFlying) && (sf::Keyboard::isKeyPressed(sf::Keyboard::F)))
     {
         grenade.isFlying = false;
@@ -159,6 +181,11 @@ void initCharacter(Character &character)
     character.hand.setPosition(character.sprite.getPosition());
     character.hand.setFillColor(sf::Color(52, 101, 52));
     character.hand.setRotation(0);
+    character.swordTexture.loadFromFile("./sword.png");
+    character.sword.setTexture(character.swordTexture);
+    character.sword.setOrigin(0, 5);
+    character.life_count = 5;
+    character.isImmune = false;
 }
 
 void initGrenade(Grenade &grenade)
@@ -177,14 +204,13 @@ void initBot(Ezbot &ezbot)
     ezbot.sprite.setOrigin(ezbot.texture.getSize().x / 2, ezbot.texture.getSize().y / 2);
     ezbot.sprite.setPosition(100, 100);
     ezbot.isAlive = false;
-    ezbot.speed.x = 90;
+    ezbot.speed.x = 50;
 }
 
 void spawnSomeBotz(Ezbot &ezbot, float deltaTime, sf::Vector2f spawnPoint)
 {
     ezbot.time += deltaTime;
     float deltaBot = remainder(ezbot.time, botSpawnTime);
-    std::cout << ezbot.isAlive << std::endl;
     if (((deltaBot > -0.01) && (deltaBot < 0.01)) && (ezbot.isAlive == false))
     {
         ezbot.sprite.setPosition(spawnPoint);
@@ -212,6 +238,30 @@ void botBrain(Ezbot &ezbot, Character &character, float deltaTime)
             ezbot.position.x = ezbot.position.x + ezbot.speed.x * deltaTime;
         }
         ezbot.sprite.setPosition(ezbot.position);
+    }
+    if ((std::abs(ezbot.distanse.x) <= (character.texture.getSize().x + ezbot.texture.getSize().x)) && (character.isImmune == false))
+    {
+        character.life_count = character.life_count - 1;
+        character.isImmune = true;
+    }
+    if ((character.immuneTime >= 0) && (character.immuneTime < 3.1) && (character.isImmune == true))
+    {
+        character.immuneTime += deltaTime;
+    }
+    else
+    {
+        character.isImmune = false;
+        character.immuneTime = 0;
+    }
+    if ((character.sprite.getScale().x == 1) && (ezbot.distanse.x < 0) && (std::abs(ezbot.distanse.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
+    {
+        ezbot.isAlive = false;
+        ezbot.sprite.setPosition(100, 100);
+    }
+    if ((character.sprite.getScale().x == -1) && (ezbot.distanse.x > 0) && (std::abs(ezbot.distanse.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
+    {
+        ezbot.isAlive = false;
+        ezbot.sprite.setPosition(100, 100);
     }
 }
 
@@ -265,7 +315,7 @@ int main()
         sf::Event event;
         while (window.pollEvent(event))
         {
-            if ((event.type == sf::Event::Closed) || (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)))
+            if ((event.type == sf::Event::Closed) || (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) || (character.life_count <= 0))
             {
                 window.close();
             }
@@ -288,6 +338,7 @@ int main()
             window.draw(grenade.sprite);
         }
         window.draw(character.hand);
+        window.draw(character.sword);
         window.display();
     }
 }
