@@ -10,6 +10,8 @@ constexpr float JUMP_START = -40.0;
 constexpr unsigned WINDOW_HEIGHT = 480;
 constexpr unsigned WINDOW_WIDTH = 640;
 constexpr unsigned MAX_HAND_ANGLE = 85;
+constexpr float botSpawnTime = 10.0;
+sf::Vector2f spawnPoint = {100, 430};
 
 struct Ezbot
 {
@@ -19,6 +21,7 @@ struct Ezbot
     sf::Vector2f speed;
     float time = 0;
     bool isAlive;
+    sf::Vector2f distanse;
 };
 
 struct Character
@@ -172,18 +175,43 @@ void initBot(Ezbot &ezbot)
     ezbot.texture.loadFromFile("./another cat.png");
     ezbot.sprite.setTexture(ezbot.texture);
     ezbot.sprite.setOrigin(ezbot.texture.getSize().x / 2, ezbot.texture.getSize().y / 2);
-    ezbot.isAlive = true;
-    ezbot.sprite.setPosition(999, 999);
+    ezbot.sprite.setPosition(100, 100);
+    ezbot.isAlive = false;
+    ezbot.speed.x = 90;
 }
 
-void spawnSomeBotz(Ezbot &ezbot, float deltaTime)
+void spawnSomeBotz(Ezbot &ezbot, float deltaTime, sf::Vector2f spawnPoint)
 {
     ezbot.time += deltaTime;
-    float botSpawnTime = 30;
     float deltaBot = remainder(ezbot.time, botSpawnTime);
-    if (deltaBot = 0)
+    std::cout << ezbot.isAlive << std::endl;
+    if (((deltaBot > -0.01) && (deltaBot < 0.01)) && (ezbot.isAlive == false))
     {
-        ezbot.sprite.setPosition(WINDOW_WIDTH / 5, WINDOW_HEIGHT - 50);
+        ezbot.sprite.setPosition(spawnPoint);
+        ezbot.isAlive = true;
+    }
+}
+
+void botBrain(Ezbot &ezbot, Character &character, float deltaTime)
+{
+    ezbot.distanse.x = character.sprite.getPosition().x - ezbot.sprite.getPosition().x;
+    if ((ezbot.isAlive == true) && (ezbot.distanse.x != 0))
+    {
+        ezbot.position = ezbot.sprite.getPosition();
+        if (ezbot.distanse.x < 0)
+        {
+            ezbot.sprite.setScale(-1, 1);
+            ezbot.position.x = ezbot.position.x - ezbot.speed.x * deltaTime;
+        }
+        else
+        {
+            if (ezbot.sprite.getScale().x == -1)
+            {
+                ezbot.sprite.setScale(1, 1);
+            };
+            ezbot.position.x = ezbot.position.x + ezbot.speed.x * deltaTime;
+        }
+        ezbot.sprite.setPosition(ezbot.position);
     }
 }
 
@@ -249,8 +277,9 @@ int main()
 
         float deltaTime = clock.restart().asSeconds();
 
-        spawnSomeBotz(ezbot, deltaTime);
+        spawnSomeBotz(ezbot, deltaTime, spawnPoint);
         update(character, grenade, deltaTime, isJumped);
+        botBrain(ezbot, character, deltaTime);
         window.clear(sf::Color(255, 255, 255));
         window.draw(character.sprite);
         window.draw(ezbot.sprite);
